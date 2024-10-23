@@ -1,16 +1,18 @@
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashSet;
+use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Deserialize)]
 struct Config {
     exclude_modules: HashSet<String>,
     exclude_start_phrases: Vec<String>,
+    output_file: String,
 }
 
 fn main() -> io::Result<()> {
@@ -30,8 +32,14 @@ fn main() -> io::Result<()> {
         }
     };
 
+    // Определяем путь к исполняемому файлу и используем его для нахождения конфигурационного файла
+    let executable_path = env::current_exe()?;
+    let config_file_path = executable_path
+        .parent()
+        .expect("Не удалось определить директорию исполняемого файла")
+        .join("mint-log-filter.json");
+
     // Читаем конфигурационный файл
-    let config_file_path = Path::new("/home/ukm5/mint/bin/logs/mint-filter.json");
     let config_data = fs::read_to_string(config_file_path)
         .expect("Не удалось прочитать конфигурационный файл");
     let config: Config = serde_json::from_str(&config_data)
@@ -80,14 +88,14 @@ fn main() -> io::Result<()> {
         }
     }
 
-    // Записываем результат в файл
-    let output_file_path = Path::new("/home/ukm5/mint/bin/logs/application-filtered.log");
+    // Записываем результат в файл, путь к которому указан в конфигурации
+    let output_file_path = PathBuf::from(&config.output_file);
     let mut output_file = File::create(output_file_path)?;
     for line in filtered_lines {
         writeln!(output_file, "{}", line)?;
     }
 
-    println!("Фильтрованный лог сохранен в файл 'application-filtered.log'.");
+    println!("Фильтрованный лог сохранен в файл '{}'.", config.output_file);
     Ok(())
 }
 
