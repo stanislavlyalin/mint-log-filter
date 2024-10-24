@@ -6,7 +6,8 @@ use std::fs;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
-use std::process::Command;
+#[cfg(target_os = "windows")]
+use clipboard::{ClipboardContext, ClipboardProvider};
 
 #[derive(Deserialize)]
 struct Config {
@@ -101,26 +102,35 @@ fn main() -> io::Result<()> {
 
 // Функция для получения содержимого буфера обмена
 fn get_clipboard_content() -> Option<String> {
-    // Используем xclip для Linux или pbpaste для macOS
-    let output = if cfg!(target_os = "linux") {
-        Command::new("xclip")
+    #[cfg(target_os = "linux")]
+    {
+        // Используем xclip для Linux
+        let output = Command::new("xclip")
             .arg("-selection")
             .arg("clipboard")
             .arg("-o")
             .output()
-            .ok()?
-    } else if cfg!(target_os = "macos") {
-        Command::new("pbpaste").output().ok()?
-    } else if cfg!(target_os = "windows") {
-        // На Windows можно использовать powershell команду для получения содержимого буфера обмена
-        Command::new("powershell")
-            .arg("-command")
-            .arg("Get-Clipboard")
-            .output()
-            .ok()?
-    } else {
-        return None;
-    };
+            .ok()?;
+        if output.stdout.is_empty() {
+            return None;
+        }
+        return String::from_utf8(output.stdout).ok();
+    }
 
-    String::from_utf8(output.stdout).ok()
+    #[cfg(target_os = "macos")]
+    {
+        // Используем pbpaste для macOS
+        let output = Command::new("pbpaste").output().ok()?;
+        if output.stdout.is_empty() {
+            return None;
+        }
+        return String::from_utf8(output.stdout).ok();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Используем библиотеку clipboard для Windows
+        let mut ctx: ClipboardContext = ClipboardProvider::new().ok()?;
+        return ctx.get_contents().ok();
+    }
 }
